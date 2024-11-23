@@ -1,0 +1,41 @@
+# Node.js dependencies
+/node_modules/
+
+# Logs
+*.log
+*.log.*
+
+# Environment files (e.g. for storing sensitive credentials)
+.env
+.env.local
+.env.*.local
+
+# Debugging and editor directories
+.vscode/
+.idea/
+
+# Operating System-specific files
+.DS_Store
+Thumbs.db
+
+# npm package-lock files (optional)
+package-lock.json
+
+# Test output
+/coverage/
+/test-reports/
+
+# Build artifacts
+/dist/
+/build/
+
+# Optional: Ignore temporary files or directories that might be created by tools
+/temp/
+/tmp/
+
+# Ignore any other personal configuration files
+*.sublime-workspace
+*.sublime-project
+
+# Other system-specific files
+*.swp

@@ -6,7 +6,7 @@ const createCsvWriter = require("csv-writer").createObjectCsvWriter;
 
 const scrapeWebsite = async (req, res) => {
   const { url } = req.body;
-
+  console.log("url-->", url);
   let browser;
   try {
     browser = await puppeteer.launch();
@@ -69,6 +69,7 @@ const scrapeWebsite = async (req, res) => {
 
     scrapedData.screenshotUrl = screenshotUrl;
 
+    console.log("scraped data-->", scrapedData);
     res.status(200).json({
       message: "Data scraped successfully",
       data: scrapedData,

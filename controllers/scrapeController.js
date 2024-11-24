@@ -6,14 +6,26 @@ const createCsvWriter = require("csv-writer").createObjectCsvWriter;
 
 const scrapeWebsite = async (req, res) => {
   const { url } = req.body;
-  console.log("url-->", url);
+
+  if (!url || !url.startsWith("http")) {
+    return res.status(400).json({
+      message: "Invalid URL provided. Please provide a valid URL.",
+    });
+  }
+
   let browser;
   try {
-    browser = await puppeteer.launch();
+    browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"], // Ensures compatibility on AWS
+    });
     const page = await browser.newPage();
-    await page.setViewport({ width: 1366, height: 1800 });
-    await page.goto(url, { waitUntil: "networkidle0" });
 
+    await page.setViewport({ width: 1366, height: 1800 });
+
+    // Wait for page to load
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+
+    // Scrape data
     const scrapedData = await page.evaluate((url) => {
       const getMetaContent = (name) => {
         const element = document.querySelector(
@@ -33,8 +45,8 @@ const scrapeWebsite = async (req, res) => {
         /(?:\+?\d{1,2}\s?)?(\(?\d{3}\)?)[-\.\s]?\d{3}[-.\s]?\d{4}/g;
 
       return {
-        name: getCompanyNameFromUrl(url), // Extracted name from the URL
-        websiteUrl: url, // The full website URL
+        name: getCompanyNameFromUrl(url),
+        websiteUrl: url,
         description: getMetaContent("description"),
         logo: document.querySelector('link[rel*="icon"]')?.href,
         facebookUrl: document.querySelector('a[href*="facebook.com"]')?.href,
@@ -48,19 +60,18 @@ const scrapeWebsite = async (req, res) => {
           /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}/
         )?.[0],
         phoneNumbers: document.body.innerText.match(phoneRegex),
-        websiteUrl: url,
       };
     }, url);
 
+    // Save screenshot
     const screenshot = await page.screenshot({
       clip: { x: 0, y: 0, width: 1366, height: 1800 },
     });
 
-    const screenshotPath = path.join(
-      __dirname,
-      "../uploads",
-      Date.now() + ".png"
-    );
+    const uploadsDir = path.join(__dirname, "../uploads");
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+
+    const screenshotPath = path.join(uploadsDir, `${Date.now()}.png`);
     fs.writeFileSync(screenshotPath, screenshot);
 
     const screenshotUrl = `${req.protocol}://${req.get(
@@ -69,12 +80,14 @@ const scrapeWebsite = async (req, res) => {
 
     scrapedData.screenshotUrl = screenshotUrl;
 
-    console.log("scraped data-->", scrapedData);
+    console.log("Scraped data:", scrapedData);
+
     res.status(200).json({
       message: "Data scraped successfully",
       data: scrapedData,
     });
   } catch (error) {
+    console.error("Error scraping website:", error);
     res.status(500).json({
       message: "Error scraping website",
       error: error.message,
@@ -83,6 +96,8 @@ const scrapeWebsite = async (req, res) => {
     if (browser) await browser.close();
   }
 };
+
+// Other functions remain the same, only formatted properly
 
 const getCompanyDetails = async (req, res) => {
   const { companyId } = req.params;
@@ -100,6 +115,7 @@ const getCompanyDetails = async (req, res) => {
       data: company,
     });
   } catch (error) {
+    console.error("Error fetching company details:", error);
     res.status(500).json({
       message: "Error fetching company details",
       error: error.message,
@@ -115,6 +131,7 @@ const getAllData = async (req, res) => {
       data,
     });
   } catch (error) {
+    console.error("Error fetching data:", error);
     res.status(500).json({
       message: "Error fetching data",
       error: error.message,
@@ -123,16 +140,15 @@ const getAllData = async (req, res) => {
 };
 
 const saveData = async (req, res) => {
-  let number = [];
-
-  if (req.body.phoneNumbers) {
-    number = req.body.phoneNumbers[0] || [];
-  }
-
   try {
+    const { phoneNumbers } = req.body;
+    const formattedPhoneNumbers = Array.isArray(phoneNumbers)
+      ? phoneNumbers[0] || []
+      : [];
+
     const data = await ScrapedData.create({
       ...req.body,
-      phoneNumbers: number,
+      phoneNumbers: formattedPhoneNumbers,
     });
 
     res.status(201).json({
@@ -156,6 +172,7 @@ const deleteData = async (req, res) => {
       message: "Data deleted successfully",
     });
   } catch (error) {
+    console.error("Error deleting data:", error);
     res.status(500).json({
       message: "Error deleting data",
       error: error.message,
@@ -179,7 +196,7 @@ const downloadCSV = async (req, res) => {
         { id: "address", title: "Address" },
         { id: "email", title: "Email" },
         { id: "phoneNumbers", title: "Phone Numbers" },
-        { id: "websiteUrl", title: "websiteUrl" },
+        { id: "websiteUrl", title: "Website URL" },
       ],
     });
 
@@ -189,6 +206,7 @@ const downloadCSV = async (req, res) => {
       fs.unlinkSync("companies.csv");
     });
   } catch (error) {
+    console.error("Error downloading CSV:", error);
     res.status(500).json({
       message: "Error downloading CSV",
       error: error.message,
